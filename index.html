@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LuckyLoop Lottery</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; }
+        button { padding: 12px; width: 100%; margin: 8px 0; background: #4CAF50; color: white; border: none; }
+        #status { padding: 12px; margin: 15px 0; border-radius: 4px; }
+        .error { background: #ffebee; color: #d32f2f; }
+        .success { background: #e8f5e9; color: #2e7d32; }
+        #walletInfo { display: none; margin: 15px 0; }
+    </style>
+</head>
+<body>
+    <h1>LuckyLoop Lottery</h1>
+    
+    <!-- Connection Section -->
+    <div id="connectionSection">
+        <button id="connectWallet">Connect Wallet</button>
+        <div id="walletInfo">
+            Connected: <span id="walletAddress"></span><br>
+            Balance: <span id="walletBalance"></span> ETH
+        </div>
+    </div>
+
+    <!-- Status Display -->
+    <div id="status" class="error">Loading...</div>
+
+    <!-- 1. First try CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    
+    <!-- 2. If CDN fails, load from local -->
+    <script>
+        if(typeof ethers === 'undefined') {
+            document.write('<script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js"><\/script>');
+        }
+    </script>
+    
+    <!-- 3. Final fallback -->
+    <script>
+        window.addEventListener('load', async () => {
+            const statusEl = document.getElementById('status');
+            
+            // Ultimate Ethers.js verification
+            if(typeof ethers === 'undefined') {
+                statusEl.innerHTML = 'Critical error: Failed to load Web3 library. <br><br>' +
+                    '1. Disable ad-blockers <br>' +
+                    '2. Try Chrome/Firefox <br>' +
+                    '3. Restart your browser';
+                return;
+            }
+
+            // MetaMask check
+            if(!window.ethereum) {
+                statusEl.innerHTML = 'MetaMask not found. ' +
+                    '<a href="https://metamask.io/download.html" target="_blank">Download it here</a>';
+                return;
+            }
+
+            // Auto-connect if already authorized
+            try {
+                const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                if(accounts.length > 0) {
+                    await handleConnection(accounts[0]);
+                } else {
+                    statusEl.className = 'error';
+                    statusEl.textContent = 'Click "Connect Wallet" to begin';
+                }
+            } catch(error) {
+                showError('Auto-connect failed: ' + error.message);
+            }
+
+            // Set up connection button
+            document.getElementById('connectWallet').addEventListener('click', async () => {
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    await handleConnection(accounts[0]);
+                } catch(error) {
+                    showError('Connection rejected: ' + error.message);
+                }
+            });
+
+            // Handle account changes
+            window.ethereum.on('accountsChanged', (accounts) => {
+                if(accounts.length === 0) {
+                    location.reload(); // Full reset if disconnected
+                } else {
+                    handleConnection(accounts[0]);
+                }
+            });
+        });
+
+        async function handleConnection(account) {
+            const statusEl = document.getElementById('status');
+            try {
+                statusEl.className = '';
+                statusEl.textContent = 'Connecting...';
+                
+                // Verify network
+                const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                if(chainId !== '0x2105') { // Base Mainnet
+                    await window.ethereum.request({
+                        method: 'wallet_switchEthereumChain',
+                        params: [{ chainId: '0x2105' }]
+                    });
+                }
+
+                // Update UI
+                document.getElementById('walletAddress').textContent = 
+                    `${account.substring(0, 6)}...${account.substring(38)}`;
+                document.getElementById('walletInfo').style.display = 'block';
+                
+                // Get balance
+                const provider = new ethers.providers.Web3Provider(window.ethereum);
+                const balance = await provider.getBalance(account);
+                document.getElementById('walletBalance').textContent = 
+                    ethers.utils.formatEther(balance).substring(0, 6);
+                
+                statusEl.className = 'success';
+                statusEl.textContent = 'Connected successfully!';
+                
+            } catch(error) {
+                showError('Connection failed: ' + error.message);
+            }
+        }
+
+        function showError(message) {
+            const statusEl = document.getElementById('status');
+            statusEl.className = 'error';
+            statusEl.textContent = message;
+            console.error(message);
+        }
+    </script>
+</body>
+</html>
